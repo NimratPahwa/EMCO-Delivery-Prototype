@@ -57,13 +57,18 @@ const StatusBar = ({ value, max, color }) => {
   );
 };
 
-const MetricCard = ({ title, value, unit, color, change, status }) => (
-  <div style={{
-    background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '20px',
-    position: 'relative', overflow: 'hidden'
-  }}>
+const MetricCard = ({ title, value, unit, color, change, status, breakdown, isExpanded, onToggle }) => (
+  <div
+    onClick={onToggle}
+    style={{
+      background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '20px',
+      position: 'relative', overflow: 'hidden', cursor: 'pointer', transition: 'all 0.3s',
+    }}>
     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: color }} />
-    <div style={{ fontSize: '12px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', fontFamily: "'JetBrains Mono', monospace" }}>{title}</div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div style={{ fontSize: '12px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', fontFamily: "'JetBrains Mono', monospace" }}>{title}</div>
+      <div style={{ fontSize: '9px', color: color, fontFamily: "'JetBrains Mono', monospace" }}>{isExpanded ? '▲' : '▼'}</div>
+    </div>
     <div style={{ fontSize: '32px', fontWeight: 'bold', color: COLORS.textPrimary, fontFamily: "'JetBrains Mono', monospace" }}>
       {value}<span style={{ fontSize: '14px', color: COLORS.textMuted, marginLeft: '4px' }}>{unit}</span>
     </div>
@@ -76,6 +81,16 @@ const MetricCard = ({ title, value, unit, color, change, status }) => (
     <div style={{ marginTop: '10px' }}>
       <StatusBar value={typeof value === 'string' ? parseInt(value) : value} max={100} color={color} />
     </div>
+    {isExpanded && breakdown && (
+      <div style={{ marginTop: '12px', borderTop: `1px solid ${color}20`, paddingTop: '12px', fontSize: '11px', color: COLORS.textSecondary, fontFamily: "'JetBrains Mono', monospace" }}>
+        {breakdown.map((item, idx) => (
+          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <span>{item.label}</span>
+            <span style={{ color }}>{item.value}</span>
+          </div>
+        ))}
+      </div>
+    )}
   </div>
 );
 
@@ -106,7 +121,7 @@ const DeliveryRow = ({ index, order, address, items, time, color }) => (
       <div style={{ color: COLORS.textSecondary, fontSize: '12px', fontFamily: "'JetBrains Mono', monospace" }}>📍 {address}</div>
     </div>
     <div style={{ textAlign: 'right', flexShrink: 0 }}>
-      <div style={{ color: COLORS.textMuted, fontSize: '12px', fontFamily: "'JetBrains Mono', monospace" }}>~{time} min</div>
+      <div style={{ color: COLORS.textMuted, fontSize: '12px', fontFamily: "'JetBrains Mono', monospace" }}>~{time} min<br/><span style={{ fontSize: '10px' }}>+ travel</span></div>
     </div>
   </div>
 );
@@ -128,6 +143,8 @@ export default function EMCODashboard() {
   const [driverSignedOff, setDriverSignedOff] = useState(false);
   const [completedStops, setCompletedStops] = useState([]);
   const [animateIn, setAnimateIn] = useState(false);
+  const [showSavingsBreakdown, setShowSavingsBreakdown] = useState(false);
+  const [expanded, setExpanded] = useState({});
 
   useEffect(() => {
     setAnimateIn(false);
@@ -254,10 +271,41 @@ export default function EMCODashboard() {
 
             {/* Top Metrics */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
-              <MetricCard title="Distance Reduction" value="28" unit="%" color={COLORS.green} status="EXCELLENT" change={-28} />
-              <MetricCard title="Time Saved" value="2.5" unit="hrs/day" color={COLORS.blue} status="GOOD" change={-26} />
-              <MetricCard title="Cost per Delivery" value="$31" unit="" color={COLORS.indigo} status="OPTIMIZED" change={-26} />
-              <MetricCard title="Driver Utilization" value="85" unit="%" color={COLORS.amber} status="GOOD" change={18} />
+              <MetricCard title="Distance Reduction" value="28" unit="%" color={COLORS.green} status="EXCELLENT" change={-28}
+                isExpanded={expanded.distance} onToggle={() => setExpanded({...expanded, distance: !expanded.distance})}
+                breakdown={[
+                  { label: 'Manual route total', value: '97 km' },
+                  { label: 'Optimized route total', value: '70 km' },
+                  { label: 'Distance saved', value: '27 km' },
+                  { label: 'Calculation', value: '27/97 = 28%' },
+                ]} />
+              <MetricCard title="Time Saved" value="2.5" unit="hrs/day" color={COLORS.blue} status="GOOD" change={-26}
+                isExpanded={expanded.time} onToggle={() => setExpanded({...expanded, time: !expanded.time})}
+                breakdown={[
+                  { label: 'Manual: Driver A', value: '4.5 hrs' },
+                  { label: 'Manual: Driver B', value: '5.0 hrs' },
+                  { label: 'Optimized: Driver A', value: '3.2 hrs' },
+                  { label: 'Optimized: Driver B', value: '3.8 hrs' },
+                  { label: 'Total saved', value: '2.5 hrs/day' },
+                ]} />
+              <MetricCard title="Cost per Delivery" value="$31" unit="" color={COLORS.indigo} status="OPTIMIZED" change={-26}
+                isExpanded={expanded.cost} onToggle={() => setExpanded({...expanded, cost: !expanded.cost})}
+                breakdown={[
+                  { label: 'Total optimized cost', value: '$466.50' },
+                  { label: '÷ 15 deliveries', value: '÷ 15' },
+                  { label: 'Cost per delivery', value: '$31.10' },
+                  { label: 'vs manual ($628/15)', value: '$41.88' },
+                  { label: 'Saving per delivery', value: '$10.78' },
+                ]} />
+              <MetricCard title="Driver Utilization" value="85" unit="%" color={COLORS.amber} status="GOOD" change={18}
+                isExpanded={expanded.util} onToggle={() => setExpanded({...expanded, util: !expanded.util})}
+                breakdown={[
+                  { label: 'Manual: active delivery time', value: '67%' },
+                  { label: 'Manual: idle/backtracking', value: '33%' },
+                  { label: 'Optimized: active delivery', value: '85%' },
+                  { label: 'Optimized: idle/travel', value: '15%' },
+                  { label: 'Improvement', value: '+18%' },
+                ]} />
             </div>
 
             {/* Charts Row */}
@@ -320,19 +368,147 @@ export default function EMCODashboard() {
               <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '24px' }}>
                 <div style={{ fontSize: '14px', color: COLORS.textSecondary, marginBottom: '20px', textTransform: 'uppercase', letterSpacing: '1px' }}>Annual Impact</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
-                  <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: `1px solid ${COLORS.green}30`, borderRadius: '8px', padding: '16px' }}>
-                    <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '4px' }}>DAILY SAVINGS</div>
+                  <div
+                    onClick={() => setShowSavingsBreakdown(!showSavingsBreakdown)}
+                    style={{ background: 'rgba(16, 185, 129, 0.08)', border: `1px solid ${COLORS.green}30`, borderRadius: '8px', padding: '16px', cursor: 'pointer', transition: 'all 0.3s' }}>
+                    <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '4px' }}>DAILY SAVINGS <span style={{ fontSize: '9px', color: COLORS.green }}>▼ click for breakdown</span></div>
                     <div style={{ fontSize: '28px', fontWeight: '700', color: COLORS.green }}>$161.75</div>
+                    {showSavingsBreakdown && (
+                      <div style={{ marginTop: '12px', borderTop: `1px solid ${COLORS.green}20`, paddingTop: '12px', fontSize: '12px', color: COLORS.textSecondary }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span>Fuel saved (27 km fewer)</span>
+                          <span style={{ color: COLORS.green }}>$6.75</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span>Labor saved (2.5 hrs fewer)</span>
+                          <span style={{ color: COLORS.green }}>$80.00</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <span>Equipment time saved (0.5 hr)</span>
+                          <span style={{ color: COLORS.green }}>$75.00</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', color: COLORS.green, borderTop: `1px solid ${COLORS.green}20`, paddingTop: '6px', marginTop: '4px' }}>
+                          <span>Total Daily Savings</span>
+                          <span>$161.75</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: `1px solid ${COLORS.blue}30`, borderRadius: '8px', padding: '16px' }}>
-                    <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '4px' }}>MONTHLY SAVINGS</div>
+                  <div
+                    onClick={() => setExpanded({...expanded, monthly: !expanded.monthly})}
+                    style={{ background: 'rgba(59, 130, 246, 0.08)', border: `1px solid ${COLORS.blue}30`, borderRadius: '8px', padding: '16px', cursor: 'pointer', transition: 'all 0.3s' }}>
+                    <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '4px' }}>MONTHLY SAVINGS <span style={{ fontSize: '9px', color: COLORS.blue }}>{expanded.monthly ? '▲' : '▼'}</span></div>
                     <div style={{ fontSize: '28px', fontWeight: '700', color: COLORS.blue }}>$3,235</div>
+                    {expanded.monthly && (
+                      <div style={{ marginTop: '12px', borderTop: `1px solid ${COLORS.blue}20`, paddingTop: '12px', fontSize: '11px', color: COLORS.textSecondary }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span>Daily savings</span>
+                          <span style={{ color: COLORS.blue }}>$161.75</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span>× Working days/month</span>
+                          <span style={{ color: COLORS.blue }}>× 20</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', color: COLORS.blue, borderTop: `1px solid ${COLORS.blue}20`, paddingTop: '4px', marginTop: '4px' }}>
+                          <span>Monthly total</span>
+                          <span>$3,235.00</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div style={{ background: 'rgba(99, 102, 241, 0.08)', border: `1px solid ${COLORS.indigo}30`, borderRadius: '8px', padding: '16px' }}>
-                    <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '4px' }}>ANNUAL SAVINGS (250 DAYS)</div>
+                  <div
+                    onClick={() => setExpanded({...expanded, annual: !expanded.annual})}
+                    style={{ background: 'rgba(99, 102, 241, 0.08)', border: `1px solid ${COLORS.indigo}30`, borderRadius: '8px', padding: '16px', cursor: 'pointer', transition: 'all 0.3s' }}>
+                    <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '4px' }}>ANNUAL SAVINGS (250 DAYS) <span style={{ fontSize: '9px', color: COLORS.indigo }}>{expanded.annual ? '▲' : '▼'}</span></div>
                     <div style={{ fontSize: '28px', fontWeight: '700', color: COLORS.indigo }}>$40,438</div>
+                    {expanded.annual && (
+                      <div style={{ marginTop: '12px', borderTop: `1px solid ${COLORS.indigo}20`, paddingTop: '12px', fontSize: '11px', color: COLORS.textSecondary }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span>Daily savings</span>
+                          <span style={{ color: COLORS.indigo }}>$161.75</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span>× Working days/year</span>
+                          <span style={{ color: COLORS.indigo }}>× 250</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', color: COLORS.indigo, borderTop: `1px solid ${COLORS.indigo}20`, paddingTop: '4px', marginTop: '4px' }}>
+                          <span>Annual total</span>
+                          <span>$40,437.50</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Efficiency & Key Metrics */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginTop: '24px' }}>
+              <div onClick={() => setExpanded({...expanded, efficiency: !expanded.efficiency})} style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '24px', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '14px', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '1px' }}>Efficiency Gains</div>
+                  <span style={{ fontSize: '9px', color: COLORS.green }}>{expanded.efficiency ? '▲ collapse' : '▼ expand'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                  <span style={{ color: COLORS.textSecondary }}>Distance Saved</span>
+                  <span style={{ color: COLORS.green, fontWeight: 'bold' }}>27 km (-28%)</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                  <span style={{ color: COLORS.textSecondary }}>Time Saved</span>
+                  <span style={{ color: COLORS.green, fontWeight: 'bold' }}>2.5 hours (-26%)</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                  <span style={{ color: COLORS.textSecondary }}>Cost per Delivery</span>
+                  <span style={{ color: COLORS.green, fontWeight: 'bold' }}>$31.10 (-26%)</span>
+                </div>
+                {expanded.efficiency && (
+                  <div style={{ marginTop: '12px', borderTop: `1px solid ${COLORS.cardBorder}`, paddingTop: '12px', fontSize: '11px', color: COLORS.textMuted, lineHeight: 1.8 }}>
+                    <div style={{ marginBottom: '6px', fontWeight: '600', color: COLORS.textSecondary }}>Distance Calculation:</div>
+                    <div>Manual: Truck A (45 km) + Truck B (52 km) = 97 km</div>
+                    <div>Optimized: Truck A (32 km) + Truck B (38 km) = 70 km</div>
+                    <div style={{ color: COLORS.green }}>Saved: 97 - 70 = 27 km (28%)</div>
+                    <div style={{ marginTop: '10px', marginBottom: '6px', fontWeight: '600', color: COLORS.textSecondary }}>Time Calculation:</div>
+                    <div>Manual: Driver A (4.5 hrs) + Driver B (5.0 hrs) = 9.5 hrs</div>
+                    <div>Optimized: Driver A (3.2 hrs) + Driver B (3.8 hrs) = 7.0 hrs</div>
+                    <div style={{ color: COLORS.green }}>Saved: 9.5 - 7.0 = 2.5 hrs (26%)</div>
+                    <div style={{ marginTop: '10px', marginBottom: '6px', fontWeight: '600', color: COLORS.textSecondary }}>Cost per Delivery:</div>
+                    <div>Manual: $628.25 ÷ 15 deliveries = $41.88</div>
+                    <div>Optimized: $466.50 ÷ 15 deliveries = $31.10</div>
+                    <div style={{ color: COLORS.green }}>Saved: $10.78 per delivery (26%)</div>
+                  </div>
+                )}
+              </div>
+
+              <div onClick={() => setExpanded({...expanded, metrics: !expanded.metrics})} style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '24px', cursor: 'pointer' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '14px', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: '1px' }}>Key Metrics</div>
+                  <span style={{ fontSize: '9px', color: COLORS.blue }}>{expanded.metrics ? '▲ collapse' : '▼ expand'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                  <span style={{ color: COLORS.textSecondary }}>Total Deliveries</span>
+                  <span style={{ fontWeight: 'bold', color: COLORS.textPrimary }}>15</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                  <span style={{ color: COLORS.textSecondary }}>Trucks Used</span>
+                  <span style={{ fontWeight: 'bold', color: COLORS.textPrimary }}>2</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                  <span style={{ color: COLORS.textSecondary }}>Driver Utilization</span>
+                  <span style={{ color: COLORS.green, fontWeight: 'bold' }}>85%</span>
+                </div>
+                {expanded.metrics && (
+                  <div style={{ marginTop: '12px', borderTop: `1px solid ${COLORS.cardBorder}`, paddingTop: '12px', fontSize: '11px', color: COLORS.textMuted, lineHeight: 1.8 }}>
+                    <div style={{ marginBottom: '6px', fontWeight: '600', color: COLORS.textSecondary }}>Delivery Split:</div>
+                    <div>Truck A: 7 deliveries (Downtown Toronto cluster)</div>
+                    <div>Truck B: 8 deliveries (North York cluster)</div>
+                    <div>Total: 15 deliveries across 2 trucks</div>
+                    <div style={{ marginTop: '10px', marginBottom: '6px', fontWeight: '600', color: COLORS.textSecondary }}>Utilization Calculation:</div>
+                    <div>Active delivery time ÷ Total shift time</div>
+                    <div>Manual: 6.3 hrs active ÷ 9.5 hrs total = 67%</div>
+                    <div>Optimized: 5.95 hrs active ÷ 7.0 hrs total = 85%</div>
+                    <div style={{ color: COLORS.green }}>Less idle time, more deliveries per hour</div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -400,8 +576,8 @@ export default function EMCODashboard() {
                   </div>
                   <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '20px' }}>
                     <div style={{ fontSize: '11px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Est. Completion</div>
-                    <div style={{ fontSize: '36px', fontWeight: '700', color: COLORS.blue }}>9:30</div>
-                    <div style={{ fontSize: '12px', color: COLORS.textSecondary }}>AM estimated</div>
+                    <div style={{ fontSize: '36px', fontWeight: '700', color: COLORS.blue }}>2:30</div>
+                    <div style={{ fontSize: '12px', color: COLORS.textSecondary }}>PM estimated</div>
                   </div>
                 </div>
 
@@ -422,7 +598,7 @@ export default function EMCODashboard() {
                         <div style={{ fontSize: '10px', color: COLORS.textMuted }}>DISTANCE</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '20px', fontWeight: '700', color: COLORS.textPrimary }}>155 min</div>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: COLORS.textPrimary }}>4.8 hrs</div>
                         <div style={{ fontSize: '10px', color: COLORS.textMuted }}>EST. TIME</div>
                       </div>
                     </div>
@@ -449,7 +625,7 @@ export default function EMCODashboard() {
                         <div style={{ fontSize: '10px', color: COLORS.textMuted }}>DISTANCE</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '20px', fontWeight: '700', color: COLORS.textPrimary }}>175 min</div>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: COLORS.textPrimary }}>5.6 hrs</div>
                         <div style={{ fontSize: '10px', color: COLORS.textMuted }}>EST. TIME</div>
                       </div>
                     </div>
