@@ -116,6 +116,12 @@ export default function EMCODashboard() {
   const [optimized, setOptimized] = useState(false);
   const [approved, setApproved] = useState(false);
   const [sent, setSent] = useState(false);
+  const [driverMode, setDriverMode] = useState(false);
+  const [currentStop, setCurrentStop] = useState(0);
+  const [photoTaken, setPhotoTaken] = useState(false);
+  const [signatureReceived, setSignatureReceived] = useState(false);
+  const [driverSignedOff, setDriverSignedOff] = useState(false);
+  const [completedStops, setCompletedStops] = useState([]);
   const [animateIn, setAnimateIn] = useState(false);
 
   useEffect(() => {
@@ -516,14 +522,14 @@ export default function EMCODashboard() {
     );
   }
 
-  // ============ SENT ============
-  if (screen === 'supervisor' && sent) {
+  // ============ SENT - LAUNCH DRIVER VIEW ============
+  if (screen === 'supervisor' && sent && !driverMode) {
     return (
       <>
         <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <div style={containerStyle}>
           <div style={{ maxWidth: '600px', margin: '0 auto', paddingTop: '60px' }}>
-            <div style={{ background: COLORS.card, border: `1px solid ${COLORS.green}40`, borderRadius: '16px', padding: '48px', textAlign: 'center', boxShadow: `0 0 40px ${COLORS.greenGlow}` }}>
+            <div style={{ background: COLORS.card, border: `1px solid ${COLORS.green}40`, borderRadius: '16px', padding: '48px', textAlign: 'center', marginBottom: '24px', boxShadow: `0 0 40px ${COLORS.greenGlow}` }}>
               <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚀</div>
               <h1 style={{ fontSize: '28px', fontWeight: '700', color: COLORS.green, margin: '0 0 16px' }}>Routes Dispatched</h1>
               <p style={{ color: COLORS.textSecondary, fontSize: '14px', marginBottom: '32px' }}>Drivers have received their delivery routes via Telegram</p>
@@ -541,13 +547,282 @@ export default function EMCODashboard() {
                   </div>
                 </div>
               </div>
+            </div>
 
-              <button onClick={() => { setOptimized(false); setApproved(false); setSent(false); }} style={{
+            <button onClick={() => { setDriverMode(true); setCurrentStop(0); setCompletedStops([]); setDriverSignedOff(false); }} style={{
+              width: '100%', background: `linear-gradient(135deg, ${COLORS.blue}, ${COLORS.indigo})`,
+              border: 'none', borderRadius: '12px', padding: '24px', cursor: 'pointer',
+              color: '#fff', fontSize: '18px', fontWeight: '600',
+              fontFamily: "'JetBrains Mono', monospace",
+              boxShadow: `0 0 30px ${COLORS.blueGlow}`,
+              transition: 'transform 0.2s',
+            }}
+            onMouseOver={e => { e.currentTarget.style.transform = 'scale(1.02)'; }}
+            onMouseOut={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+            >
+              📱 View Driver Experience (Truck A)
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ============ DRIVER EXECUTION ============
+  if (screen === 'supervisor' && sent && driverMode && !driverSignedOff) {
+    const currentDelivery = truckA[currentStop];
+    const isLastStop = currentStop === truckA.length - 1;
+    const progressPct = Math.round(((completedStops.length) / truckA.length) * 100);
+
+    const handleDeliverComplete = () => {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      setCompletedStops([...completedStops, { ...currentDelivery, completedTime: timeStr, stopNum: currentStop + 1 }]);
+      setPhotoTaken(false);
+      setSignatureReceived(false);
+
+      if (isLastStop) {
+        setDriverSignedOff(false);
+        setCurrentStop(currentStop + 1);
+      } else {
+        setCurrentStop(currentStop + 1);
+      }
+    };
+
+    // All stops done - sign off screen
+    if (currentStop >= truckA.length) {
+      return (
+        <>
+          <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+          <div style={containerStyle}>
+            <div style={{ maxWidth: '600px', margin: '0 auto', paddingTop: '40px' }}>
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.green}40`, borderRadius: '16px', padding: '40px', textAlign: 'center', marginBottom: '24px', boxShadow: `0 0 40px ${COLORS.greenGlow}` }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎉</div>
+                <h1 style={{ fontSize: '24px', fontWeight: '700', color: COLORS.green, margin: '0 0 8px' }}>All Deliveries Complete</h1>
+                <p style={{ color: COLORS.textSecondary, fontSize: '13px', marginBottom: '24px' }}>{truckA.length} of {truckA.length} deliveries completed</p>
+
+                <div style={{ width: '100%', height: '8px', background: '#1e293b', borderRadius: '4px', overflow: 'hidden', marginBottom: '24px' }}>
+                  <div style={{ width: '100%', height: '100%', background: COLORS.green, borderRadius: '4px', boxShadow: `0 0 8px ${COLORS.green}40` }} />
+                </div>
+
+                {/* Completed Stops Summary */}
+                <div style={{ textAlign: 'left', marginBottom: '24px' }}>
+                  <div style={{ fontSize: '11px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>Delivery Log</div>
+                  {completedStops.map((stop, idx) => (
+                    <div key={idx} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '10px 12px', background: idx % 2 === 0 ? 'rgba(30, 41, 59, 0.5)' : 'transparent',
+                      borderRadius: '6px', fontSize: '12px'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{ color: COLORS.green }}>✅</span>
+                        <span style={{ color: COLORS.textPrimary }}>{stop.order}</span>
+                        <span style={{ color: COLORS.textMuted }}>|</span>
+                        <span style={{ color: COLORS.textSecondary }}>{stop.items}</span>
+                      </div>
+                      <span style={{ color: COLORS.textMuted }}>{stop.completedTime}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button onClick={() => setDriverSignedOff(true)} style={{
+                width: '100%', background: `linear-gradient(135deg, ${COLORS.green}, #059669)`,
+                border: 'none', borderRadius: '12px', padding: '24px', cursor: 'pointer',
+                color: '#fff', fontSize: '18px', fontWeight: '600',
+                fontFamily: "'JetBrains Mono', monospace",
+                boxShadow: `0 0 30px ${COLORS.greenGlow}`,
+                transition: 'transform 0.2s',
+              }}
+              onMouseOver={e => { e.currentTarget.style.transform = 'scale(1.02)'; }}
+              onMouseOut={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+              >
+                ✍️ Sign Off & Notify Supervisor
+              </button>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <div style={containerStyle}>
+          <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+            {/* Driver Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <div>
+                <div style={{ fontSize: '11px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px' }}>TRUCK A — DRIVER VIEW</div>
+                <h1 style={{ fontSize: '24px', fontWeight: '700', color: COLORS.textPrimary, margin: '4px 0 0' }}>Delivery Execution</h1>
+              </div>
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '8px', padding: '8px 16px', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: '700', color: COLORS.blue }}>{currentStop + 1}/{truckA.length}</div>
+                <div style={{ fontSize: '10px', color: COLORS.textMuted }}>STOP</div>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div style={{ marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                <span style={{ fontSize: '11px', color: COLORS.textMuted }}>Route Progress</span>
+                <span style={{ fontSize: '11px', color: COLORS.blue }}>{progressPct}%</span>
+              </div>
+              <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ width: `${progressPct}%`, height: '100%', background: COLORS.blue, borderRadius: '3px', transition: 'width 0.5s ease', boxShadow: `0 0 8px ${COLORS.blue}40` }} />
+              </div>
+            </div>
+
+            {/* Current Delivery Card */}
+            <div style={{ background: COLORS.card, border: `1px solid ${COLORS.blue}40`, borderRadius: '16px', padding: '28px', marginBottom: '16px', boxShadow: `0 0 20px ${COLORS.blueGlow}` }}>
+              <div style={{ fontSize: '11px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>Current Delivery</div>
+
+              {/* Address */}
+              <div style={{ background: 'rgba(30, 41, 59, 0.5)', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+                <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '6px' }}>DELIVERY ADDRESS</div>
+                <div style={{ fontSize: '16px', fontWeight: '600', color: COLORS.textPrimary, marginBottom: '4px' }}>📍 {currentDelivery.address}</div>
+              </div>
+
+              {/* Products */}
+              <div style={{ background: 'rgba(30, 41, 59, 0.5)', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+                <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '6px' }}>PRODUCTS TO DELIVER</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: '16px', fontWeight: '600', color: COLORS.textPrimary }}>📦 {currentDelivery.items}</div>
+                  <div style={{
+                    background: `${COLORS.blue}20`, border: `1px solid ${COLORS.blue}40`, borderRadius: '6px',
+                    padding: '4px 12px', fontSize: '12px', color: COLORS.blue, fontWeight: '600'
+                  }}>
+                    {currentDelivery.order}
+                  </div>
+                </div>
+              </div>
+
+              {/* Number of Products */}
+              <div style={{ background: 'rgba(30, 41, 59, 0.5)', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+                <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '6px' }}>NUMBER OF PRODUCTS DELIVERED</div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: COLORS.amber }}>{currentDelivery.items.split(' ')[0]}</div>
+              </div>
+
+              {/* Photo Upload */}
+              <button
+                onClick={() => setPhotoTaken(true)}
+                disabled={photoTaken}
+                style={{
+                  width: '100%', padding: '16px', borderRadius: '10px', cursor: photoTaken ? 'default' : 'pointer',
+                  border: photoTaken ? `1px solid ${COLORS.green}40` : `1px solid ${COLORS.amber}40`,
+                  background: photoTaken ? `${COLORS.green}10` : `${COLORS.amber}10`,
+                  color: photoTaken ? COLORS.green : COLORS.amber,
+                  fontSize: '14px', fontWeight: '600', marginBottom: '12px',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  transition: 'all 0.3s',
+                }}
+              >
+                {photoTaken ? '✅ Photo Uploaded' : '📸 Upload Delivery Photo'}
+              </button>
+
+              {/* Client Signature */}
+              <button
+                onClick={() => setSignatureReceived(true)}
+                disabled={signatureReceived}
+                style={{
+                  width: '100%', padding: '16px', borderRadius: '10px', cursor: signatureReceived ? 'default' : 'pointer',
+                  border: signatureReceived ? `1px solid ${COLORS.green}40` : `1px solid ${COLORS.indigo}40`,
+                  background: signatureReceived ? `${COLORS.green}10` : `${COLORS.indigo}10`,
+                  color: signatureReceived ? COLORS.green : COLORS.indigo,
+                  fontSize: '14px', fontWeight: '600', marginBottom: '16px',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  transition: 'all 0.3s',
+                }}
+              >
+                {signatureReceived ? '✅ Client Signature Received' : '✍️ Capture Client Signature'}
+              </button>
+
+              {/* Deliver Button */}
+              <button
+                onClick={handleDeliverComplete}
+                disabled={!photoTaken || !signatureReceived}
+                style={{
+                  width: '100%', padding: '20px', borderRadius: '12px', cursor: (!photoTaken || !signatureReceived) ? 'not-allowed' : 'pointer',
+                  border: 'none',
+                  background: (!photoTaken || !signatureReceived)
+                    ? '#1e293b'
+                    : `linear-gradient(135deg, ${COLORS.green}, #059669)`,
+                  color: (!photoTaken || !signatureReceived) ? COLORS.textMuted : '#fff',
+                  fontSize: '16px', fontWeight: '700',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  boxShadow: (photoTaken && signatureReceived) ? `0 0 20px ${COLORS.greenGlow}` : 'none',
+                  transition: 'all 0.3s',
+                }}
+              >
+                {(!photoTaken || !signatureReceived) ? '⏳ Complete Photo & Signature First' : '✅ Order Delivered — Next Stop'}
+              </button>
+            </div>
+
+            {/* Completed Stops */}
+            {completedStops.length > 0 && (
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '20px' }}>
+                <div style={{ fontSize: '11px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '12px' }}>
+                  Completed ({completedStops.length}/{truckA.length})
+                </div>
+                {completedStops.map((stop, idx) => (
+                  <div key={idx} style={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                    padding: '8px 12px', background: idx % 2 === 0 ? 'rgba(30, 41, 59, 0.3)' : 'transparent',
+                    borderRadius: '6px', fontSize: '12px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: COLORS.green }}>✅</span>
+                      <span style={{ color: COLORS.textPrimary }}>Stop {stop.stopNum}</span>
+                      <span style={{ color: COLORS.textMuted }}>|</span>
+                      <span style={{ color: COLORS.textSecondary }}>{stop.items}</span>
+                    </div>
+                    <span style={{ color: COLORS.textMuted }}>{stop.completedTime}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  // ============ DRIVER SIGNED OFF ============
+  if (screen === 'supervisor' && sent && driverMode && driverSignedOff) {
+    return (
+      <>
+        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <div style={containerStyle}>
+          <div style={{ maxWidth: '600px', margin: '0 auto', paddingTop: '60px' }}>
+            <div style={{ background: COLORS.card, border: `1px solid ${COLORS.green}40`, borderRadius: '16px', padding: '48px', textAlign: 'center', boxShadow: `0 0 40px ${COLORS.greenGlow}` }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>📋</div>
+              <h1 style={{ fontSize: '24px', fontWeight: '700', color: COLORS.green, margin: '0 0 8px' }}>Driver Signed Off</h1>
+              <p style={{ color: COLORS.textSecondary, fontSize: '13px', marginBottom: '32px' }}>End of day report sent to supervisor</p>
+
+              <div style={{ background: 'rgba(30, 41, 59, 0.5)', borderRadius: '10px', padding: '20px', textAlign: 'left', marginBottom: '24px' }}>
+                <div style={{ fontSize: '11px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '16px' }}>Supervisor Notification</div>
+
+                <div style={{ background: COLORS.bg, borderRadius: '8px', padding: '16px', border: `1px solid ${COLORS.cardBorder}` }}>
+                  <div style={{ fontSize: '12px', color: COLORS.blue, marginBottom: '8px', fontWeight: '600' }}>📱 Telegram Message to Supervisor</div>
+                  <div style={{ fontSize: '13px', color: COLORS.textPrimary, lineHeight: 1.6 }}>
+                    <div style={{ marginBottom: '8px' }}>🚚 <strong>TRUCK A — END OF DAY REPORT</strong></div>
+                    <div style={{ color: COLORS.textSecondary }}>
+                      <div>✅ All {truckA.length} deliveries completed</div>
+                      <div>📸 {truckA.length} photos uploaded</div>
+                      <div>✍️ {truckA.length} signatures collected</div>
+                      <div>🕐 Route completed at {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      <div style={{ marginTop: '8px', color: COLORS.green, fontWeight: '600' }}>STATUS: ALL DELIVERIES CONFIRMED ✅</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button onClick={() => { setOptimized(false); setApproved(false); setSent(false); setDriverMode(false); setDriverSignedOff(false); setCurrentStop(0); setCompletedStops([]); }} style={{
                 background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '8px',
                 padding: '12px 32px', cursor: 'pointer', color: COLORS.textSecondary, fontSize: '13px',
                 fontFamily: "'JetBrains Mono', monospace",
               }}>
-                Start New Route
+                Back to Home
               </button>
             </div>
           </div>
