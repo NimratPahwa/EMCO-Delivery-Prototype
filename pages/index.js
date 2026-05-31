@@ -626,6 +626,7 @@ export default function EMCODashboard() {
                         <span style={{ color: COLORS.textPrimary }}>{stop.order}</span>
                         <span style={{ color: COLORS.textMuted }}>|</span>
                         <span style={{ color: COLORS.textSecondary }}>{stop.items}</span>
+                        {stop.noOneAvailable && <span style={{ color: COLORS.red, fontSize: '10px', fontWeight: '600', background: `${COLORS.red}15`, padding: '2px 6px', borderRadius: '4px', border: `1px solid ${COLORS.red}30` }}>NO ONE ON SITE</span>}
                       </div>
                       <span style={{ color: COLORS.textMuted }}>{stop.completedTime}</span>
                     </div>
@@ -774,17 +775,46 @@ export default function EMCODashboard() {
               {!signatureReceived ? (
                 <div style={{ marginBottom: '16px' }}>
                   {!showSignaturePad ? (
-                    <button
-                      onClick={() => setShowSignaturePad(true)}
-                      style={{
-                        width: '100%', padding: '16px', borderRadius: '10px', cursor: 'pointer',
-                        border: `1px solid ${COLORS.indigo}40`, background: `${COLORS.indigo}10`,
-                        color: COLORS.indigo, fontSize: '14px', fontWeight: '600',
-                        fontFamily: "'JetBrains Mono', monospace", transition: 'all 0.3s',
-                      }}
-                    >
-                      ✍️ Capture Client Signature
-                    </button>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <button
+                        onClick={() => setShowSignaturePad(true)}
+                        style={{
+                          width: '100%', padding: '16px', borderRadius: '10px', cursor: 'pointer',
+                          border: `1px solid ${COLORS.indigo}40`, background: `${COLORS.indigo}10`,
+                          color: COLORS.indigo, fontSize: '14px', fontWeight: '600',
+                          fontFamily: "'JetBrains Mono', monospace", transition: 'all 0.3s',
+                        }}
+                      >
+                        ✍️ Capture Client Signature
+                      </button>
+                      {photoTaken && (
+                        <button
+                          onClick={() => {
+                            setSignatureReceived(true);
+                            setShowSignaturePad(false);
+                            const now = new Date();
+                            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            setCompletedStops([...completedStops, { ...currentDelivery, completedTime: timeStr, stopNum: currentStop + 1, noOneAvailable: true }]);
+                            setPhotoTaken(false);
+                            setPhotoPreview(null);
+                            if (currentStop < truckA.length - 1) {
+                              setCurrentStop(currentStop + 1);
+                            } else {
+                              setCurrentStop(currentStop + 1);
+                            }
+                            setSignatureReceived(false);
+                          }}
+                          style={{
+                            width: '100%', padding: '16px', borderRadius: '10px', cursor: 'pointer',
+                            border: `1px solid ${COLORS.red}40`, background: `${COLORS.red}10`,
+                            color: COLORS.red, fontSize: '14px', fontWeight: '600',
+                            fontFamily: "'JetBrains Mono', monospace", transition: 'all 0.3s',
+                          }}
+                        >
+                          ⚠️ No One Available at Delivery Site
+                        </button>
+                      )}
+                    </div>
                   ) : (
                     <div>
                       <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Client Signature</div>
@@ -917,6 +947,7 @@ export default function EMCODashboard() {
                       <span style={{ color: COLORS.textPrimary }}>Stop {stop.stopNum}</span>
                       <span style={{ color: COLORS.textMuted }}>|</span>
                       <span style={{ color: COLORS.textSecondary }}>{stop.items}</span>
+                      {stop.noOneAvailable && <span style={{ color: COLORS.red, fontSize: '10px', fontWeight: '600', background: `${COLORS.red}15`, padding: '2px 6px', borderRadius: '4px', border: `1px solid ${COLORS.red}30` }}>NO ONE ON SITE</span>}
                     </div>
                     <span style={{ color: COLORS.textMuted }}>{stop.completedTime}</span>
                   </div>
@@ -951,7 +982,10 @@ export default function EMCODashboard() {
                     <div style={{ color: COLORS.textSecondary }}>
                       <div>✅ All {truckA.length} deliveries completed</div>
                       <div>📸 {truckA.length} photos uploaded</div>
-                      <div>✍️ {truckA.length} signatures collected</div>
+                      <div>✍️ {truckA.length - completedStops.filter(s => s.noOneAvailable).length} signatures collected</div>
+                      {completedStops.filter(s => s.noOneAvailable).length > 0 && (
+                        <div style={{ color: COLORS.amber }}>⚠️ {completedStops.filter(s => s.noOneAvailable).length} deliveries — no one available on site (photo proof logged)</div>
+                      )}
                       <div>🕐 Route completed at {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                       <div style={{ marginTop: '8px', color: COLORS.green, fontWeight: '600' }}>STATUS: ALL DELIVERIES CONFIRMED ✅</div>
                     </div>
