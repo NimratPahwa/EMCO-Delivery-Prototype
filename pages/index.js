@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
 
 const COLORS = {
@@ -120,6 +120,11 @@ export default function EMCODashboard() {
   const [currentStop, setCurrentStop] = useState(0);
   const [photoTaken, setPhotoTaken] = useState(false);
   const [signatureReceived, setSignatureReceived] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const sigCanvasRef = useRef(null);
+  const fileInputRef = useRef(null);
   const [driverSignedOff, setDriverSignedOff] = useState(false);
   const [completedStops, setCompletedStops] = useState([]);
   const [animateIn, setAnimateIn] = useState(false);
@@ -580,6 +585,8 @@ export default function EMCODashboard() {
       setCompletedStops([...completedStops, { ...currentDelivery, completedTime: timeStr, stopNum: currentStop + 1 }]);
       setPhotoTaken(false);
       setSignatureReceived(false);
+      setPhotoPreview(null);
+      setShowSignaturePad(false);
 
       if (isLastStop) {
         setDriverSignedOff(false);
@@ -650,6 +657,13 @@ export default function EMCODashboard() {
         <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
         <div style={containerStyle}>
           <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+            {/* Back Button */}
+            <button onClick={() => { setDriverMode(false); setCurrentStop(0); setCompletedStops([]); setPhotoTaken(false); setSignatureReceived(false); setPhotoPreview(null); setShowSignaturePad(false); }} style={{
+              background: 'none', border: `1px solid ${COLORS.cardBorder}`, borderRadius: '8px',
+              padding: '8px 20px', cursor: 'pointer', color: COLORS.textSecondary, marginBottom: '24px',
+              fontSize: '13px', fontFamily: "'JetBrains Mono', monospace"
+            }}>← Back to Dashboard</button>
+
             {/* Driver Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <div>
@@ -703,39 +717,167 @@ export default function EMCODashboard() {
                 <div style={{ fontSize: '24px', fontWeight: '700', color: COLORS.amber }}>{currentDelivery.items.split(' ')[0]}</div>
               </div>
 
-              {/* Photo Upload */}
-              <button
-                onClick={() => setPhotoTaken(true)}
-                disabled={photoTaken}
-                style={{
-                  width: '100%', padding: '16px', borderRadius: '10px', cursor: photoTaken ? 'default' : 'pointer',
-                  border: photoTaken ? `1px solid ${COLORS.green}40` : `1px solid ${COLORS.amber}40`,
-                  background: photoTaken ? `${COLORS.green}10` : `${COLORS.amber}10`,
-                  color: photoTaken ? COLORS.green : COLORS.amber,
-                  fontSize: '14px', fontWeight: '600', marginBottom: '12px',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  transition: 'all 0.3s',
+              {/* Real Photo Upload */}
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      setPhotoPreview(ev.target.result);
+                      setPhotoTaken(true);
+                    };
+                    reader.readAsDataURL(file);
+                  }
                 }}
-              >
-                {photoTaken ? '✅ Photo Uploaded' : '📸 Upload Delivery Photo'}
-              </button>
+              />
 
-              {/* Client Signature */}
-              <button
-                onClick={() => setSignatureReceived(true)}
-                disabled={signatureReceived}
-                style={{
-                  width: '100%', padding: '16px', borderRadius: '10px', cursor: signatureReceived ? 'default' : 'pointer',
-                  border: signatureReceived ? `1px solid ${COLORS.green}40` : `1px solid ${COLORS.indigo}40`,
-                  background: signatureReceived ? `${COLORS.green}10` : `${COLORS.indigo}10`,
-                  color: signatureReceived ? COLORS.green : COLORS.indigo,
-                  fontSize: '14px', fontWeight: '600', marginBottom: '16px',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  transition: 'all 0.3s',
-                }}
-              >
-                {signatureReceived ? '✅ Client Signature Received' : '✍️ Capture Client Signature'}
-              </button>
+              {!photoTaken ? (
+                <button
+                  onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                  style={{
+                    width: '100%', padding: '16px', borderRadius: '10px', cursor: 'pointer',
+                    border: `1px solid ${COLORS.amber}40`,
+                    background: `${COLORS.amber}10`,
+                    color: COLORS.amber,
+                    fontSize: '14px', fontWeight: '600', marginBottom: '12px',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    transition: 'all 0.3s',
+                  }}
+                >
+                  📸 Take / Upload Delivery Photo
+                </button>
+              ) : (
+                <div style={{ marginBottom: '12px' }}>
+                  <div style={{
+                    width: '100%', padding: '12px', borderRadius: '10px',
+                    border: `1px solid ${COLORS.green}40`, background: `${COLORS.green}10`,
+                    color: COLORS.green, fontSize: '14px', fontWeight: '600', textAlign: 'center',
+                    fontFamily: "'JetBrains Mono', monospace", marginBottom: '8px'
+                  }}>
+                    ✅ Photo Uploaded
+                  </div>
+                  {photoPreview && (
+                    <div style={{ borderRadius: '8px', overflow: 'hidden', border: `1px solid ${COLORS.cardBorder}` }}>
+                      <img src={photoPreview} alt="Delivery" style={{ width: '100%', maxHeight: '200px', objectFit: 'cover' }} />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Real Signature Pad */}
+              {!signatureReceived ? (
+                <div style={{ marginBottom: '16px' }}>
+                  {!showSignaturePad ? (
+                    <button
+                      onClick={() => setShowSignaturePad(true)}
+                      style={{
+                        width: '100%', padding: '16px', borderRadius: '10px', cursor: 'pointer',
+                        border: `1px solid ${COLORS.indigo}40`, background: `${COLORS.indigo}10`,
+                        color: COLORS.indigo, fontSize: '14px', fontWeight: '600',
+                        fontFamily: "'JetBrains Mono', monospace", transition: 'all 0.3s',
+                      }}
+                    >
+                      ✍️ Capture Client Signature
+                    </button>
+                  ) : (
+                    <div>
+                      <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '1px' }}>Client Signature</div>
+                      <div style={{ border: `1px solid ${COLORS.indigo}40`, borderRadius: '10px', overflow: 'hidden', marginBottom: '8px', background: '#fff' }}>
+                        <canvas
+                          ref={sigCanvasRef}
+                          width={500}
+                          height={180}
+                          style={{ width: '100%', height: '180px', cursor: 'crosshair', touchAction: 'none' }}
+                          onMouseDown={(e) => {
+                            setIsDrawing(true);
+                            const canvas = sigCanvasRef.current;
+                            const ctx = canvas.getContext('2d');
+                            const rect = canvas.getBoundingClientRect();
+                            const scaleX = canvas.width / rect.width;
+                            const scaleY = canvas.height / rect.height;
+                            ctx.beginPath();
+                            ctx.moveTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
+                          }}
+                          onMouseMove={(e) => {
+                            if (!isDrawing) return;
+                            const canvas = sigCanvasRef.current;
+                            const ctx = canvas.getContext('2d');
+                            const rect = canvas.getBoundingClientRect();
+                            const scaleX = canvas.width / rect.width;
+                            const scaleY = canvas.height / rect.height;
+                            ctx.lineWidth = 2;
+                            ctx.lineCap = 'round';
+                            ctx.strokeStyle = '#000';
+                            ctx.lineTo((e.clientX - rect.left) * scaleX, (e.clientY - rect.top) * scaleY);
+                            ctx.stroke();
+                          }}
+                          onMouseUp={() => setIsDrawing(false)}
+                          onMouseLeave={() => setIsDrawing(false)}
+                          onTouchStart={(e) => {
+                            e.preventDefault();
+                            setIsDrawing(true);
+                            const canvas = sigCanvasRef.current;
+                            const ctx = canvas.getContext('2d');
+                            const rect = canvas.getBoundingClientRect();
+                            const touch = e.touches[0];
+                            const scaleX = canvas.width / rect.width;
+                            const scaleY = canvas.height / rect.height;
+                            ctx.beginPath();
+                            ctx.moveTo((touch.clientX - rect.left) * scaleX, (touch.clientY - rect.top) * scaleY);
+                          }}
+                          onTouchMove={(e) => {
+                            e.preventDefault();
+                            if (!isDrawing) return;
+                            const canvas = sigCanvasRef.current;
+                            const ctx = canvas.getContext('2d');
+                            const rect = canvas.getBoundingClientRect();
+                            const touch = e.touches[0];
+                            const scaleX = canvas.width / rect.width;
+                            const scaleY = canvas.height / rect.height;
+                            ctx.lineWidth = 2;
+                            ctx.lineCap = 'round';
+                            ctx.strokeStyle = '#000';
+                            ctx.lineTo((touch.clientX - rect.left) * scaleX, (touch.clientY - rect.top) * scaleY);
+                            ctx.stroke();
+                          }}
+                          onTouchEnd={(e) => { e.preventDefault(); setIsDrawing(false); }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button onClick={() => {
+                          const canvas = sigCanvasRef.current;
+                          const ctx = canvas.getContext('2d');
+                          ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        }} style={{
+                          flex: 1, padding: '10px', borderRadius: '8px', cursor: 'pointer',
+                          border: `1px solid ${COLORS.cardBorder}`, background: COLORS.card,
+                          color: COLORS.textSecondary, fontSize: '12px', fontFamily: "'JetBrains Mono', monospace",
+                        }}>Clear</button>
+                        <button onClick={() => { setSignatureReceived(true); setShowSignaturePad(false); }} style={{
+                          flex: 2, padding: '10px', borderRadius: '8px', cursor: 'pointer',
+                          border: 'none', background: `linear-gradient(135deg, ${COLORS.indigo}, ${COLORS.blue})`,
+                          color: '#fff', fontSize: '12px', fontWeight: '600', fontFamily: "'JetBrains Mono', monospace",
+                        }}>Accept Signature</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{
+                  width: '100%', padding: '16px', borderRadius: '10px',
+                  border: `1px solid ${COLORS.green}40`, background: `${COLORS.green}10`,
+                  color: COLORS.green, fontSize: '14px', fontWeight: '600', textAlign: 'center',
+                  fontFamily: "'JetBrains Mono', monospace", marginBottom: '16px'
+                }}>
+                  ✅ Client Signature Received
+                </div>
+              )}
 
               {/* Deliver Button */}
               <button
