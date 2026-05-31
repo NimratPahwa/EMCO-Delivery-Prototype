@@ -658,7 +658,7 @@ export default function EMCODashboard() {
         <div style={containerStyle}>
           <div style={{ maxWidth: '600px', margin: '0 auto' }}>
             {/* Back Button */}
-            <button onClick={() => { setDriverMode(false); setCurrentStop(0); setCompletedStops([]); setPhotoTaken(false); setSignatureReceived(false); setPhotoPreview(null); setShowSignaturePad(false); }} style={{
+            <button onClick={() => { setScreen('home'); setDriverMode(false); setCurrentStop(0); setCompletedStops([]); setPhotoTaken(false); setSignatureReceived(false); setPhotoPreview(null); setShowSignaturePad(false); setOptimized(false); setApproved(false); setSent(false); }} style={{
               background: 'none', border: `1px solid ${COLORS.cardBorder}`, borderRadius: '8px',
               padding: '8px 20px', cursor: 'pointer', color: COLORS.textSecondary, marginBottom: '24px',
               fontSize: '13px', fontFamily: "'JetBrains Mono', monospace"
