@@ -1,444 +1,558 @@
-import React, { useState } from 'react';
-import { ChevronRight, MapPin, Truck, MessageCircle, Check, X, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
 
-export default function EMCODeliveryDashboard() {
-  const [activeScreen, setActiveScreen] = useState('home');
-  const [routesOptimized, setRoutesOptimized] = useState(false);
-  const [routesApproved, setRoutesApproved] = useState(false);
-  const [routesSent, setRoutesSent] = useState(false);
+const COLORS = {
+  bg: '#0a0e1a',
+  card: '#111827',
+  cardBorder: '#1e293b',
+  blue: '#3b82f6',
+  blueGlow: 'rgba(59, 130, 246, 0.15)',
+  indigo: '#6366f1',
+  indigoGlow: 'rgba(99, 102, 241, 0.15)',
+  green: '#10b981',
+  greenGlow: 'rgba(16, 185, 129, 0.15)',
+  amber: '#f59e0b',
+  red: '#ef4444',
+  textPrimary: '#f1f5f9',
+  textSecondary: '#94a3b8',
+  textMuted: '#64748b',
+};
 
-  const truckADeliveries = [
-    { order: 'Order 1', address: '123 King St, Toronto', items: '5 Faucets', time: 20 },
-    { order: 'Order 4', address: '456 Queen Ave, Toronto', items: '8 Faucets', time: 20 },
-    { order: 'Order 6', address: '321 Bloor St, Toronto', items: '2 Showerheads', time: 20 },
-    { order: 'Order 9', address: '654 Yonge St, Toronto', items: '4 Pipes', time: 20 },
-    { order: 'Order 12', address: '987 Front St, Toronto', items: '3 Valves', time: 20 },
-    { order: 'Order 14', address: '147 Adelaide St, Toronto', items: '6 Faucets', time: 20 },
-    { order: 'Order 15', address: '789 Richmond St, Toronto', items: '2 Showerheads', time: 20 },
+const GaugeChart = ({ value, max, color, label, sublabel }) => {
+  const percentage = (value / max) * 100;
+  const circumference = 2 * Math.PI * 45;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  
+  return (
+    <div style={{ textAlign: 'center' }}>
+      <svg width="120" height="120" viewBox="0 0 120 120">
+        <circle cx="60" cy="60" r="45" fill="none" stroke="#1e293b" strokeWidth="8" />
+        <circle
+          cx="60" cy="60" r="45" fill="none"
+          stroke={color} strokeWidth="8"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+          transform="rotate(-90 60 60)"
+          style={{ transition: 'stroke-dashoffset 1.5s ease-out' }}
+        />
+        <text x="60" y="55" textAnchor="middle" fill={COLORS.textPrimary} fontSize="24" fontWeight="bold" fontFamily="'JetBrains Mono', monospace">{value}</text>
+        <text x="60" y="75" textAnchor="middle" fill={COLORS.textSecondary} fontSize="11" fontFamily="'JetBrains Mono', monospace">{sublabel}</text>
+      </svg>
+      <div style={{ color: COLORS.textSecondary, fontSize: '12px', marginTop: '4px', fontFamily: "'JetBrains Mono', monospace" }}>{label}</div>
+    </div>
+  );
+};
+
+const StatusBar = ({ value, max, color }) => {
+  const pct = Math.min((value / max) * 100, 100);
+  return (
+    <div style={{ width: '100%', height: '6px', background: '#1e293b', borderRadius: '3px', overflow: 'hidden' }}>
+      <div style={{
+        width: `${pct}%`, height: '100%', background: color, borderRadius: '3px',
+        transition: 'width 1.2s ease-out',
+        boxShadow: `0 0 8px ${color}40`
+      }} />
+    </div>
+  );
+};
+
+const MetricCard = ({ title, value, unit, color, change, status }) => (
+  <div style={{
+    background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '20px',
+    position: 'relative', overflow: 'hidden'
+  }}>
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '3px', background: color }} />
+    <div style={{ fontSize: '12px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px', fontFamily: "'JetBrains Mono', monospace" }}>{title}</div>
+    <div style={{ fontSize: '32px', fontWeight: 'bold', color: COLORS.textPrimary, fontFamily: "'JetBrains Mono', monospace" }}>
+      {value}<span style={{ fontSize: '14px', color: COLORS.textMuted, marginLeft: '4px' }}>{unit}</span>
+    </div>
+    {status && <div style={{ fontSize: '11px', color, fontWeight: 'bold', marginTop: '4px', fontFamily: "'JetBrains Mono', monospace" }}>{status}</div>}
+    {change && (
+      <div style={{ fontSize: '12px', color: change > 0 ? COLORS.green : COLORS.red, marginTop: '6px', fontFamily: "'JetBrains Mono', monospace" }}>
+        {change > 0 ? '▲' : '▼'} {Math.abs(change)}% vs manual
+      </div>
+    )}
+    <div style={{ marginTop: '10px' }}>
+      <StatusBar value={typeof value === 'string' ? parseInt(value) : value} max={100} color={color} />
+    </div>
+  </div>
+);
+
+const DeliveryRow = ({ index, order, address, items, time, color }) => (
+  <div style={{
+    display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
+    background: index % 2 === 0 ? 'rgba(30, 41, 59, 0.5)' : 'transparent',
+    borderRadius: '8px', transition: 'background 0.2s',
+  }}>
+    <div style={{
+      width: '32px', height: '32px', borderRadius: '50%', background: color,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: '14px', fontWeight: 'bold', color: '#fff', flexShrink: 0,
+      fontFamily: "'JetBrains Mono', monospace",
+      boxShadow: `0 0 12px ${color}40`
+    }}>
+      {index + 1}
+    </div>
+    <div style={{ flex: 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+        <span style={{ color: COLORS.textPrimary, fontWeight: '600', fontSize: '13px', fontFamily: "'JetBrains Mono', monospace" }}>{order}</span>
+        <span style={{
+          fontSize: '10px', background: `${color}20`, color: color, padding: '2px 8px',
+          borderRadius: '4px', fontWeight: '600', border: `1px solid ${color}40`,
+          fontFamily: "'JetBrains Mono', monospace"
+        }}>{items}</span>
+      </div>
+      <div style={{ color: COLORS.textSecondary, fontSize: '12px', fontFamily: "'JetBrains Mono', monospace" }}>📍 {address}</div>
+    </div>
+    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+      <div style={{ color: COLORS.textMuted, fontSize: '12px', fontFamily: "'JetBrains Mono', monospace" }}>~{time} min</div>
+    </div>
+  </div>
+);
+
+export default function EMCODashboard() {
+  const [screen, setScreen] = useState('home');
+  const [optimized, setOptimized] = useState(false);
+  const [approved, setApproved] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [animateIn, setAnimateIn] = useState(false);
+
+  useEffect(() => {
+    setAnimateIn(false);
+    setTimeout(() => setAnimateIn(true), 50);
+  }, [screen]);
+
+  const truckA = [
+    { order: 'ORD-1042', address: '123 King St, Toronto', items: '5 Faucets', time: 20 },
+    { order: 'ORD-1045', address: '456 Queen Ave, Toronto', items: '8 Faucets', time: 20 },
+    { order: 'ORD-1048', address: '321 Bloor St W, Toronto', items: '2 Showerheads', time: 20 },
+    { order: 'ORD-1051', address: '654 Yonge St, Toronto', items: '4 Pipes', time: 20 },
+    { order: 'ORD-1054', address: '987 Front St E, Toronto', items: '3 Valves', time: 20 },
+    { order: 'ORD-1057', address: '147 Adelaide St W, Toronto', items: '6 Faucets', time: 20 },
+    { order: 'ORD-1060', address: '789 Richmond St, Toronto', items: '2 Showerheads', time: 20 },
   ];
 
-  const truckBDeliveries = [
-    { order: 'Order 2', address: '100 Dundas Rd, North York', items: '3 Bathtubs', time: 20 },
-    { order: 'Order 3', address: '200 Don Mills Rd, North York', items: '2 Bathtubs', time: 20 },
-    { order: 'Order 5', address: '300 Bloor St, North York', items: '7 Faucets', time: 20 },
-    { order: 'Order 7', address: '400 Steeles Ave, North York', items: '5 Showerheads', time: 20 },
-    { order: 'Order 8', address: '500 Finch Ave, North York', items: '3 Valves', time: 20 },
-    { order: 'Order 10', address: '600 Lawrence Ave, North York', items: '4 Pipes', time: 20 },
-    { order: 'Order 11', address: '700 Eglinton Ave, North York', items: '2 Faucets', time: 20 },
-    { order: 'Order 13', address: '800 Bayview Ave, North York', items: '6 Showerheads', time: 20 },
+  const truckB = [
+    { order: 'ORD-1043', address: '100 Dundas Rd, North York', items: '3 Bathtubs', time: 20 },
+    { order: 'ORD-1044', address: '200 Don Mills Rd, North York', items: '2 Bathtubs', time: 20 },
+    { order: 'ORD-1046', address: '300 Sheppard Ave, North York', items: '7 Faucets', time: 20 },
+    { order: 'ORD-1047', address: '400 Steeles Ave W, North York', items: '5 Showerheads', time: 20 },
+    { order: 'ORD-1049', address: '500 Finch Ave E, North York', items: '3 Valves', time: 20 },
+    { order: 'ORD-1050', address: '600 Lawrence Ave W, North York', items: '4 Pipes', time: 20 },
+    { order: 'ORD-1052', address: '700 Eglinton Ave E, North York', items: '2 Faucets', time: 20 },
+    { order: 'ORD-1053', address: '800 Bayview Ave, North York', items: '6 Showerheads', time: 20 },
   ];
 
-  const calculateTotalTime = (deliveries) => {
-    return deliveries.length * 20 + 15; // 20 min per stop + 15 min buffer
+  const savingsData = [
+    { name: 'Mon', manual: 628, optimized: 467 },
+    { name: 'Tue', manual: 595, optimized: 441 },
+    { name: 'Wed', manual: 710, optimized: 520 },
+    { name: 'Thu', manual: 642, optimized: 475 },
+    { name: 'Fri', manual: 680, optimized: 498 },
+  ];
+
+  const trendData = [
+    { month: 'Jan', savings: 2800 },
+    { month: 'Feb', savings: 3100 },
+    { month: 'Mar', savings: 3400 },
+    { month: 'Apr', savings: 3200 },
+    { month: 'May', savings: 3600 },
+    { month: 'Jun', savings: 4044 },
+  ];
+
+  const containerStyle = {
+    minHeight: '100vh', background: COLORS.bg, padding: '32px',
+    fontFamily: "'JetBrains Mono', monospace",
+    opacity: animateIn ? 1 : 0, transition: 'opacity 0.4s ease-in'
   };
 
-  // ============ HOME SCREEN ============
-  if (activeScreen === 'home') {
+  // ============ HOME ============
+  if (screen === 'home') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-gray-800 rounded-2xl shadow-2xl p-12 text-center border border-gray-700">
-            <div className="mb-8">
-              <h1 className="text-5xl font-bold text-white mb-2">EMCO Delivery Optimizer</h1>
-              <p className="text-gray-400 text-lg">AI-Powered Route Optimization & Execution</p>
+      <>
+        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <div style={containerStyle}>
+          <div style={{ maxWidth: '600px', margin: '0 auto', paddingTop: '80px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+              <div style={{ fontSize: '14px', color: COLORS.blue, letterSpacing: '4px', textTransform: 'uppercase', marginBottom: '16px' }}>EMCO CORPORATION</div>
+              <h1 style={{ fontSize: '42px', fontWeight: '700', color: COLORS.textPrimary, margin: 0, lineHeight: 1.2 }}>Delivery<br />Optimizer</h1>
+              <div style={{ width: '60px', height: '3px', background: COLORS.blue, margin: '24px auto', borderRadius: '2px' }} />
+              <p style={{ color: COLORS.textSecondary, fontSize: '14px' }}>AI-Powered Route Optimization & Execution</p>
             </div>
 
-            <div className="space-y-4">
-              <button
-                onClick={() => setActiveScreen('savings')}
-                className="w-full bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-bold py-4 px-6 rounded-lg flex items-center justify-between transition transform hover:scale-105"
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <button onClick={() => setScreen('savings')} style={{
+                background: COLORS.card, border: `1px solid ${COLORS.green}40`, borderRadius: '12px',
+                padding: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                transition: 'all 0.3s', color: COLORS.textPrimary,
+              }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = COLORS.green; e.currentTarget.style.boxShadow = `0 0 20px ${COLORS.greenGlow}`; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = `${COLORS.green}40`; e.currentTarget.style.boxShadow = 'none'; }}
               >
-                <span className="text-lg">💰 Cost Savings Analysis</span>
-                <ChevronRight />
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px' }}>Executive Cost Saving Analysis Dashboard</div>
+                  <div style={{ fontSize: '12px', color: COLORS.textSecondary }}>ROI metrics, cost comparison, efficiency gains</div>
+                </div>
+                <div style={{ fontSize: '24px' }}>→</div>
               </button>
 
-              <button
-                onClick={() => {
-                  setActiveScreen('supervisor');
-                  setRoutesOptimized(false);
-                  setRoutesApproved(false);
-                  setRoutesSent(false);
-                }}
-                className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-bold py-4 px-6 rounded-lg flex items-center justify-between transition transform hover:scale-105"
+              <button onClick={() => { setScreen('supervisor'); setOptimized(false); setApproved(false); setSent(false); }} style={{
+                background: COLORS.card, border: `1px solid ${COLORS.blue}40`, borderRadius: '12px',
+                padding: '24px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                transition: 'all 0.3s', color: COLORS.textPrimary,
+              }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = COLORS.blue; e.currentTarget.style.boxShadow = `0 0 20px ${COLORS.blueGlow}`; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = `${COLORS.blue}40`; e.currentTarget.style.boxShadow = 'none'; }}
               >
-                <span className="text-lg">🚚 Supervisor Dashboard</span>
-                <ChevronRight />
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '4px' }}>Supervisor Dashboard</div>
+                  <div style={{ fontSize: '12px', color: COLORS.textSecondary }}>Route optimization, approvals, dispatch</div>
+                </div>
+                <div style={{ fontSize: '24px' }}>→</div>
               </button>
             </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
-  // ============ COST SAVINGS DASHBOARD ============
-  if (activeScreen === 'savings') {
+  // ============ COST SAVINGS ============
+  if (screen === 'savings') {
     return (
-      <div className="min-h-screen bg-gray-900 p-8">
-        <button
-          onClick={() => setActiveScreen('home')}
-          className="mb-8 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg"
-        >
-          ← Back
-        </button>
+      <>
+        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <div style={containerStyle}>
+          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+            <button onClick={() => setScreen('home')} style={{
+              background: 'none', border: `1px solid ${COLORS.cardBorder}`, borderRadius: '8px',
+              padding: '8px 20px', cursor: 'pointer', color: COLORS.textSecondary, marginBottom: '32px',
+              fontSize: '13px', fontFamily: "'JetBrains Mono', monospace"
+            }}>← Back</button>
 
-        <div className="max-w-7xl mx-auto">
-          <h1 className="text-4xl font-bold text-white mb-8">Cost Savings Analysis</h1>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+              <div>
+                <h1 style={{ fontSize: '28px', fontWeight: '700', color: COLORS.textPrimary, margin: 0 }}>Executive Cost Saving Analysis Dashboard</h1>
+                <p style={{ color: COLORS.textSecondary, fontSize: '13px', margin: '4px 0 0' }}>Ontario Region | Last 30 Days | May 30, 2026</p>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '8px', padding: '8px 16px', fontSize: '12px', color: COLORS.textSecondary }}>Live Data</div>
+              </div>
+            </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            {/* Manual */}
-            <div className="bg-gray-800 border border-red-500 rounded-xl p-8">
-              <h2 className="text-2xl font-bold text-red-400 mb-6">Manual Routing</h2>
-              <div className="space-y-4 text-gray-300">
-                <div className="flex justify-between text-lg">
-                  <span>Distance</span>
-                  <span className="font-bold">97 km</span>
-                </div>
-                <div className="flex justify-between text-lg">
-                  <span>Time</span>
-                  <span className="font-bold">9.5 hours</span>
-                </div>
-                <div className="border-t border-gray-700 pt-4 mt-4">
-                  <div className="text-sm text-gray-400 mb-3">Cost Breakdown:</div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>Fuel</span>
-                      <span>$24.25</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Labor (9.5 hrs × $32)</span>
-                      <span>$304</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Equipment</span>
-                      <span>$300</span>
-                    </div>
-                    <div className="flex justify-between text-lg font-bold text-red-400 mt-3 pt-3 border-t border-gray-700">
-                      <span>Total</span>
-                      <span>$628.25</span>
-                    </div>
+            {/* Top Metrics */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
+              <MetricCard title="Distance Reduction" value="28" unit="%" color={COLORS.green} status="EXCELLENT" change={-28} />
+              <MetricCard title="Time Saved" value="2.5" unit="hrs/day" color={COLORS.blue} status="GOOD" change={-26} />
+              <MetricCard title="Cost per Delivery" value="$31" unit="" color={COLORS.indigo} status="OPTIMIZED" change={-26} />
+              <MetricCard title="Driver Utilization" value="85" unit="%" color={COLORS.amber} status="GOOD" change={18} />
+            </div>
+
+            {/* Charts Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '16px', marginBottom: '24px' }}>
+              {/* Daily Cost Comparison */}
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '24px' }}>
+                <div style={{ fontSize: '14px', color: COLORS.textSecondary, marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '1px' }}>Daily Cost Comparison</div>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={savingsData} barGap={4}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="name" tick={{ fill: COLORS.textMuted, fontSize: 11 }} axisLine={{ stroke: '#1e293b' }} />
+                    <YAxis tick={{ fill: COLORS.textMuted, fontSize: 11 }} axisLine={{ stroke: '#1e293b' }} />
+                    <Tooltip
+                      contentStyle={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '8px', fontSize: '12px' }}
+                      labelStyle={{ color: COLORS.textPrimary }}
+                    />
+                    <Bar dataKey="manual" fill={COLORS.red} radius={[4, 4, 0, 0]} name="Manual" />
+                    <Bar dataKey="optimized" fill={COLORS.green} radius={[4, 4, 0, 0]} name="Optimized" />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div style={{ display: 'flex', gap: '24px', justifyContent: 'center', marginTop: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: COLORS.textMuted }}>
+                    <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: COLORS.red }} /> Manual Routing
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: COLORS.textMuted }}>
+                    <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: COLORS.green }} /> AI Optimized
                   </div>
                 </div>
               </div>
+
+              {/* Gauges */}
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '24px' }}>
+                <div style={{ fontSize: '14px', color: COLORS.textSecondary, marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '1px' }}>Performance</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <GaugeChart value={28} max={100} color={COLORS.green} label="Fuel Saved" sublabel="%" />
+                  <GaugeChart value={85} max={100} color={COLORS.blue} label="Utilization" sublabel="%" />
+                  <GaugeChart value={26} max={100} color={COLORS.indigo} label="Time Saved" sublabel="%" />
+                  <GaugeChart value={15} max={100} color={COLORS.amber} label="Deliveries" sublabel="/day" />
+                </div>
+              </div>
             </div>
 
-            {/* Optimized */}
-            <div className="bg-gray-800 border border-emerald-500 rounded-xl p-8">
-              <h2 className="text-2xl font-bold text-emerald-400 mb-6">AI-Optimized</h2>
-              <div className="space-y-4 text-gray-300">
-                <div className="flex justify-between text-lg">
-                  <span>Distance</span>
-                  <span className="font-bold">70 km</span>
-                </div>
-                <div className="flex justify-between text-lg">
-                  <span>Time</span>
-                  <span className="font-bold">7.0 hours</span>
-                </div>
-                <div className="border-t border-gray-700 pt-4 mt-4">
-                  <div className="text-sm text-gray-400 mb-3">Cost Breakdown:</div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span>Fuel</span>
-                      <span>$17.50</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Labor (7.0 hrs × $32)</span>
-                      <span>$224</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Equipment</span>
-                      <span>$225</span>
-                    </div>
-                    <div className="flex justify-between text-lg font-bold text-emerald-400 mt-3 pt-3 border-t border-gray-700">
-                      <span>Total</span>
-                      <span>$466.50</span>
-                    </div>
+            {/* Bottom Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              {/* Savings Trend */}
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '24px' }}>
+                <div style={{ fontSize: '14px', color: COLORS.textSecondary, marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '1px' }}>Monthly Savings Trend</div>
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={trendData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="month" tick={{ fill: COLORS.textMuted, fontSize: 11 }} axisLine={{ stroke: '#1e293b' }} />
+                    <YAxis tick={{ fill: COLORS.textMuted, fontSize: 11 }} axisLine={{ stroke: '#1e293b' }} />
+                    <Tooltip contentStyle={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '8px', fontSize: '12px' }} />
+                    <Line type="monotone" dataKey="savings" stroke={COLORS.green} strokeWidth={2} dot={{ fill: COLORS.green, r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Annual Impact */}
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '24px' }}>
+                <div style={{ fontSize: '14px', color: COLORS.textSecondary, marginBottom: '20px', textTransform: 'uppercase', letterSpacing: '1px' }}>Annual Impact</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
+                  <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: `1px solid ${COLORS.green}30`, borderRadius: '8px', padding: '16px' }}>
+                    <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '4px' }}>DAILY SAVINGS</div>
+                    <div style={{ fontSize: '28px', fontWeight: '700', color: COLORS.green }}>$161.75</div>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Savings */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-8 text-white mb-8">
-            <div className="grid grid-cols-3 gap-8 text-center">
-              <div>
-                <div className="text-4xl font-bold mb-2">$161.75</div>
-                <div className="text-blue-100">Daily Savings</div>
-              </div>
-              <div className="border-l border-r border-blue-400">
-                <div className="text-4xl font-bold mb-2">$3,235</div>
-                <div className="text-blue-100">Monthly</div>
-              </div>
-              <div>
-                <div className="text-4xl font-bold mb-2">$40,438</div>
-                <div className="text-blue-100">Annual (250 days)</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Metrics */}
-          <div className="grid grid-cols-2 gap-6">
-            <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-              <h3 className="font-bold text-white mb-4 text-lg">Efficiency Gains</h3>
-              <div className="space-y-3 text-sm text-gray-300">
-                <div className="flex justify-between">
-                  <span>Distance Saved</span>
-                  <span className="text-emerald-400 font-bold">27 km (-28%)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Time Saved</span>
-                  <span className="text-emerald-400 font-bold">2.5 hours (-26%)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Cost per Delivery</span>
-                  <span className="text-emerald-400 font-bold">$31.10 (-26%)</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gray-800 rounded-xl p-6 border border-gray-700">
-              <h3 className="font-bold text-white mb-4 text-lg">Key Metrics</h3>
-              <div className="space-y-3 text-sm text-gray-300">
-                <div className="flex justify-between">
-                  <span>Total Deliveries</span>
-                  <span className="font-bold text-white">15</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Trucks Used</span>
-                  <span className="font-bold text-white">2</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Driver Utilization</span>
-                  <span className="text-emerald-400 font-bold">85%</span>
+                  <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: `1px solid ${COLORS.blue}30`, borderRadius: '8px', padding: '16px' }}>
+                    <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '4px' }}>MONTHLY SAVINGS</div>
+                    <div style={{ fontSize: '28px', fontWeight: '700', color: COLORS.blue }}>$3,235</div>
+                  </div>
+                  <div style={{ background: 'rgba(99, 102, 241, 0.08)', border: `1px solid ${COLORS.indigo}30`, borderRadius: '8px', padding: '16px' }}>
+                    <div style={{ fontSize: '11px', color: COLORS.textMuted, marginBottom: '4px' }}>ANNUAL SAVINGS (250 DAYS)</div>
+                    <div style={{ fontSize: '28px', fontWeight: '700', color: COLORS.indigo }}>$40,438</div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
   // ============ SUPERVISOR DASHBOARD ============
-  if (activeScreen === 'supervisor' && !routesApproved && !routesSent) {
+  if (screen === 'supervisor' && !approved && !sent) {
     return (
-      <div className="min-h-screen bg-gray-900 p-8">
-        <button
-          onClick={() => setActiveScreen('home')}
-          className="mb-8 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg"
-        >
-          ← Back
-        </button>
+      <>
+        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <div style={containerStyle}>
+          <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+            <button onClick={() => setScreen('home')} style={{
+              background: 'none', border: `1px solid ${COLORS.cardBorder}`, borderRadius: '8px',
+              padding: '8px 20px', cursor: 'pointer', color: COLORS.textSecondary, marginBottom: '32px',
+              fontSize: '13px', fontFamily: "'JetBrains Mono', monospace"
+            }}>← Back</button>
 
-        <div className="max-w-7xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold text-white mb-2">Delivery Route Supervisor</h1>
-            <p className="text-gray-400">⏰ 4:00 AM | Ontario Region | 15 Orders Ready</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+              <div>
+                <h1 style={{ fontSize: '28px', fontWeight: '700', color: COLORS.textPrimary, margin: 0 }}>Delivery Route Supervisor</h1>
+                <p style={{ color: COLORS.textSecondary, fontSize: '13px', margin: '4px 0 0' }}>Ontario Region | 15 Orders Ready | May 30, 2026</p>
+              </div>
+              <div style={{ background: COLORS.card, border: `1px solid ${COLORS.amber}40`, borderRadius: '8px', padding: '8px 16px', fontSize: '12px', color: COLORS.amber }}>⏰ 4:00 AM</div>
+            </div>
+
+            {/* Optimize Button */}
+            {!optimized && (
+              <button onClick={() => setOptimized(true)} style={{
+                width: '100%', background: `linear-gradient(135deg, ${COLORS.indigo}, ${COLORS.blue})`,
+                border: 'none', borderRadius: '12px', padding: '24px', cursor: 'pointer',
+                color: '#fff', fontSize: '18px', fontWeight: '600', marginBottom: '32px',
+                fontFamily: "'JetBrains Mono', monospace",
+                boxShadow: `0 0 30px ${COLORS.blueGlow}`,
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}
+              onMouseOver={e => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.boxShadow = `0 0 50px ${COLORS.blueGlow}`; }}
+              onMouseOut={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = `0 0 30px ${COLORS.blueGlow}`; }}
+              >
+                🤖 Optimize Routes with Google Maps API
+              </button>
+            )}
+
+            {optimized && (
+              <>
+                {/* Summary Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '24px' }}>
+                  <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '20px' }}>
+                    <div style={{ fontSize: '11px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Total Orders</div>
+                    <div style={{ fontSize: '36px', fontWeight: '700', color: COLORS.textPrimary }}>15</div>
+                    <div style={{ fontSize: '12px', color: COLORS.textSecondary }}>across 2 trucks</div>
+                  </div>
+                  <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '20px' }}>
+                    <div style={{ fontSize: '11px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Total Distance</div>
+                    <div style={{ fontSize: '36px', fontWeight: '700', color: COLORS.green }}>70 <span style={{ fontSize: '16px' }}>km</span></div>
+                    <div style={{ fontSize: '12px', color: COLORS.green }}>optimized route</div>
+                  </div>
+                  <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '20px' }}>
+                    <div style={{ fontSize: '11px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Departure</div>
+                    <div style={{ fontSize: '36px', fontWeight: '700', color: COLORS.amber }}>6:00</div>
+                    <div style={{ fontSize: '12px', color: COLORS.textSecondary }}>AM departure</div>
+                  </div>
+                  <div style={{ background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '12px', padding: '20px' }}>
+                    <div style={{ fontSize: '11px', color: COLORS.textMuted, textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '8px' }}>Est. Completion</div>
+                    <div style={{ fontSize: '36px', fontWeight: '700', color: COLORS.blue }}>9:30</div>
+                    <div style={{ fontSize: '12px', color: COLORS.textSecondary }}>AM estimated</div>
+                  </div>
+                </div>
+
+                {/* Truck A */}
+                <div style={{ background: COLORS.card, border: `1px solid ${COLORS.blue}40`, borderRadius: '12px', padding: '24px', marginBottom: '16px', boxShadow: `0 0 20px ${COLORS.blueGlow}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ background: COLORS.blue, borderRadius: '8px', padding: '8px 12px', fontSize: '14px', fontWeight: '700', color: '#fff' }}>TRUCK A</div>
+                      <div style={{ color: COLORS.textSecondary, fontSize: '13px' }}>Downtown Toronto Cluster</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '24px' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: COLORS.textPrimary }}>7</div>
+                        <div style={{ fontSize: '10px', color: COLORS.textMuted }}>STOPS</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: COLORS.blue }}>32 km</div>
+                        <div style={{ fontSize: '10px', color: COLORS.textMuted }}>DISTANCE</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: COLORS.textPrimary }}>155 min</div>
+                        <div style={{ fontSize: '10px', color: COLORS.textMuted }}>EST. TIME</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    {truckA.map((d, i) => <DeliveryRow key={i} index={i} {...d} color={COLORS.blue} />)}
+                  </div>
+                </div>
+
+                {/* Truck B */}
+                <div style={{ background: COLORS.card, border: `1px solid ${COLORS.indigo}40`, borderRadius: '12px', padding: '24px', marginBottom: '24px', boxShadow: `0 0 20px ${COLORS.indigoGlow}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ background: COLORS.indigo, borderRadius: '8px', padding: '8px 12px', fontSize: '14px', fontWeight: '700', color: '#fff' }}>TRUCK B</div>
+                      <div style={{ color: COLORS.textSecondary, fontSize: '13px' }}>North York Cluster</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '24px' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: COLORS.textPrimary }}>8</div>
+                        <div style={{ fontSize: '10px', color: COLORS.textMuted }}>STOPS</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: COLORS.indigo }}>38 km</div>
+                        <div style={{ fontSize: '10px', color: COLORS.textMuted }}>DISTANCE</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '20px', fontWeight: '700', color: COLORS.textPrimary }}>175 min</div>
+                        <div style={{ fontSize: '10px', color: COLORS.textMuted }}>EST. TIME</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    {truckB.map((d, i) => <DeliveryRow key={i} index={i} {...d} color={COLORS.indigo} />)}
+                  </div>
+                </div>
+
+                {/* Approval */}
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <button onClick={() => setApproved(true)} style={{
+                    flex: 1, background: `linear-gradient(135deg, ${COLORS.green}, #059669)`,
+                    border: 'none', borderRadius: '12px', padding: '20px', cursor: 'pointer',
+                    color: '#fff', fontSize: '16px', fontWeight: '600',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    boxShadow: `0 0 20px ${COLORS.greenGlow}`,
+                    transition: 'transform 0.2s',
+                  }}
+                  onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                  onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    ✓ Approve Routes
+                  </button>
+                  <button onClick={() => setOptimized(false)} style={{
+                    flex: 1, background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`,
+                    borderRadius: '12px', padding: '20px', cursor: 'pointer',
+                    color: COLORS.textSecondary, fontSize: '16px', fontWeight: '600',
+                    fontFamily: "'JetBrains Mono', monospace",
+                    transition: 'transform 0.2s',
+                  }}
+                  onMouseOver={e => e.currentTarget.style.transform = 'scale(1.02)'}
+                  onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    ✕ Change
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-
-          {/* Optimize Button */}
-          {!routesOptimized ? (
-            <button
-              onClick={() => setRoutesOptimized(true)}
-              className="w-full mb-8 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white font-bold py-4 px-6 rounded-lg text-lg transition transform hover:scale-105"
-            >
-              🤖 Optimize Routes with Google Maps
-            </button>
-          ) : null}
-
-          {routesOptimized && (
-            <>
-              {/* Truck A */}
-              <div className="bg-gray-800 border border-blue-500 rounded-xl p-8 mb-8">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-3xl font-bold text-blue-400 flex items-center gap-2">
-                    <Truck size={32} /> Truck A
-                  </h2>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-white">32 km</div>
-                    <div className="text-sm text-gray-400">Optimized Route</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 pb-6 border-b border-gray-700">
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">Deliveries</div>
-                    <div className="text-3xl font-bold text-white">{truckADeliveries.length}</div>
-                  </div>
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">Est. Time</div>
-                    <div className="text-3xl font-bold text-white">{calculateTotalTime(truckADeliveries)} min</div>
-                  </div>
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">Departure</div>
-                    <div className="text-3xl font-bold text-white">6:00 AM</div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {truckADeliveries.map((delivery, idx) => (
-                    <div key={idx} className="flex items-start gap-4 bg-gray-700 rounded-lg p-4">
-                      <div className="flex-shrink-0 bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold">
-                        {idx + 1}
-                      </div>
-                      <div className="flex-grow">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-bold text-white">{delivery.order}</span>
-                          <span className="text-xs bg-blue-600 text-white px-2 py-1 rounded">{delivery.items}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-300">
-                          <MapPin size={16} />
-                          {delivery.address}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-gray-300">~{delivery.time} min</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Truck B */}
-              <div className="bg-gray-800 border border-indigo-500 rounded-xl p-8 mb-8">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-3xl font-bold text-indigo-400 flex items-center gap-2">
-                    <Truck size={32} /> Truck B
-                  </h2>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-white">38 km</div>
-                    <div className="text-sm text-gray-400">Optimized Route</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 pb-6 border-b border-gray-700">
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">Deliveries</div>
-                    <div className="text-3xl font-bold text-white">{truckBDeliveries.length}</div>
-                  </div>
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">Est. Time</div>
-                    <div className="text-3xl font-bold text-white">{calculateTotalTime(truckBDeliveries)} min</div>
-                  </div>
-                  <div className="bg-gray-700 rounded-lg p-4">
-                    <div className="text-sm text-gray-400 mb-1">Departure</div>
-                    <div className="text-3xl font-bold text-white">6:00 AM</div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {truckBDeliveries.map((delivery, idx) => (
-                    <div key={idx} className="flex items-start gap-4 bg-gray-700 rounded-lg p-4">
-                      <div className="flex-shrink-0 bg-indigo-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold">
-                        {idx + 1}
-                      </div>
-                      <div className="flex-grow">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-bold text-white">{delivery.order}</span>
-                          <span className="text-xs bg-indigo-600 text-white px-2 py-1 rounded">{delivery.items}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-300">
-                          <MapPin size={16} />
-                          {delivery.address}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-sm font-bold text-gray-300">~{delivery.time} min</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Approval Section */}
-              <div className="bg-gray-800 border border-gray-700 rounded-xl p-8">
-                <h3 className="text-2xl font-bold text-white mb-6">Route Approval</h3>
-                <div className="flex gap-4">
-                  <button
-                    onClick={() => setRoutesApproved(true)}
-                    className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-700 hover:to-emerald-600 text-white font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-2 transition transform hover:scale-105 text-lg"
-                  >
-                    <Check size={24} />
-                    Approve Routes
-                  </button>
-                  <button
-                    onClick={() => setRoutesOptimized(false)}
-                    className="flex-1 bg-gradient-to-r from-gray-600 to-gray-500 hover:from-gray-700 hover:to-gray-600 text-white font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-2 transition transform hover:scale-105 text-lg"
-                  >
-                    <X size={24} />
-                    Change
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
         </div>
-      </div>
+      </>
     );
   }
 
   // ============ SEND TO DRIVERS ============
-  if (activeScreen === 'supervisor' && routesApproved && !routesSent) {
+  if (screen === 'supervisor' && approved && !sent) {
     return (
-      <div className="min-h-screen bg-gray-900 p-8">
-        <button
-          onClick={() => setActiveScreen('supervisor')}
-          className="mb-8 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg"
-        >
-          ← Back
-        </button>
-
-        <div className="max-w-3xl mx-auto">
-          <div className="bg-gray-800 border border-green-500 rounded-xl p-8 text-center mb-8">
-            <h1 className="text-4xl font-bold text-green-400 mb-4">✅ Routes Approved</h1>
-            <p className="text-gray-300 text-lg">Ready to send to drivers via Telegram</p>
-          </div>
-
-          <button
-            onClick={() => setRoutesSent(true)}
-            className="w-full bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-700 hover:to-purple-600 text-white font-bold py-6 px-6 rounded-lg flex items-center justify-center gap-3 transition transform hover:scale-105 text-xl"
-          >
-            <MessageCircle size={28} />
-            Send Routes to Drivers via Telegram
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ============ ROUTES SENT ============
-  if (activeScreen === 'supervisor' && routesSent) {
-    return (
-      <div className="min-h-screen bg-gray-900 p-8">
-        <div className="max-w-3xl mx-auto">
-          <div className="bg-gray-800 border border-green-500 rounded-xl p-12 text-center">
-            <h1 className="text-5xl font-bold text-green-400 mb-4">✅ Routes Sent!</h1>
-            <p className="text-gray-300 text-xl mb-8">Drivers have received their delivery routes via Telegram</p>
-            
-            <div className="bg-gray-700 rounded-lg p-8 mb-8">
-              <h3 className="text-white font-bold mb-4">Message Sent to Drivers:</h3>
-              <div className="text-left text-gray-300 space-y-2">
-                <div>🚚 TRUCK A: 7 deliveries | 32 km | 6:00 AM departure</div>
-                <div>🚚 TRUCK B: 8 deliveries | 38 km | 6:00 AM departure</div>
-              </div>
+      <>
+        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <div style={containerStyle}>
+          <div style={{ maxWidth: '600px', margin: '0 auto', paddingTop: '60px' }}>
+            <div style={{ background: COLORS.card, border: `1px solid ${COLORS.green}40`, borderRadius: '16px', padding: '48px', textAlign: 'center', marginBottom: '24px', boxShadow: `0 0 40px ${COLORS.greenGlow}` }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
+              <h1 style={{ fontSize: '28px', fontWeight: '700', color: COLORS.green, margin: '0 0 8px' }}>Routes Approved</h1>
+              <p style={{ color: COLORS.textSecondary, fontSize: '14px' }}>Ready to dispatch to drivers via Telegram</p>
             </div>
 
-            <button
-              onClick={() => {
-                setActiveScreen('supervisor');
-                setRoutesOptimized(false);
-                setRoutesApproved(false);
-                setRoutesSent(false);
-              }}
-              className="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white font-bold py-4 px-8 rounded-lg transition transform hover:scale-105"
+            <button onClick={() => setSent(true)} style={{
+              width: '100%', background: `linear-gradient(135deg, ${COLORS.indigo}, ${COLORS.blue})`,
+              border: 'none', borderRadius: '12px', padding: '24px', cursor: 'pointer',
+              color: '#fff', fontSize: '18px', fontWeight: '600',
+              fontFamily: "'JetBrains Mono', monospace",
+              boxShadow: `0 0 30px ${COLORS.blueGlow}`,
+              transition: 'transform 0.2s',
+            }}
+            onMouseOver={e => { e.currentTarget.style.transform = 'scale(1.02)'; }}
+            onMouseOut={e => { e.currentTarget.style.transform = 'scale(1)'; }}
             >
-              Start New Route
+              📱 Send Routes to Drivers via Telegram
             </button>
           </div>
         </div>
-      </div>
+      </>
+    );
+  }
+
+  // ============ SENT ============
+  if (screen === 'supervisor' && sent) {
+    return (
+      <>
+        <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+        <div style={containerStyle}>
+          <div style={{ maxWidth: '600px', margin: '0 auto', paddingTop: '60px' }}>
+            <div style={{ background: COLORS.card, border: `1px solid ${COLORS.green}40`, borderRadius: '16px', padding: '48px', textAlign: 'center', boxShadow: `0 0 40px ${COLORS.greenGlow}` }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>🚀</div>
+              <h1 style={{ fontSize: '28px', fontWeight: '700', color: COLORS.green, margin: '0 0 16px' }}>Routes Dispatched</h1>
+              <p style={{ color: COLORS.textSecondary, fontSize: '14px', marginBottom: '32px' }}>Drivers have received their delivery routes via Telegram</p>
+
+              <div style={{ background: 'rgba(30, 41, 59, 0.5)', borderRadius: '8px', padding: '16px', textAlign: 'left', marginBottom: '24px' }}>
+                <div style={{ fontSize: '12px', color: COLORS.textMuted, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>Dispatch Summary</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: COLORS.textSecondary }}>
+                    <span style={{ color: COLORS.blue }}>TRUCK A</span>
+                    <span>7 deliveries | 32 km | 6:00 AM</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: COLORS.textSecondary }}>
+                    <span style={{ color: COLORS.indigo }}>TRUCK B</span>
+                    <span>8 deliveries | 38 km | 6:00 AM</span>
+                  </div>
+                </div>
+              </div>
+
+              <button onClick={() => { setOptimized(false); setApproved(false); setSent(false); }} style={{
+                background: COLORS.card, border: `1px solid ${COLORS.cardBorder}`, borderRadius: '8px',
+                padding: '12px 32px', cursor: 'pointer', color: COLORS.textSecondary, fontSize: '13px',
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>
+                Start New Route
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
     );
   }
 }
